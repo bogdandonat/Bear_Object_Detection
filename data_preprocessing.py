@@ -1,10 +1,11 @@
 """Renaming dataset that has already data augmentation such as contrast, brightness, sharpen, rotations etc."""
+""" Replace "path" with you path """
 
 import os
 
-train_path = r'E:\Bear Project\data\train\brown_bear'
-val_path = r'E:\Bear Project\data\val\brown_bear'
-test_path= r'E:\Bear Project\data\test\brown_bear'
+train_path = r'path\data\train\brown_bear'
+val_path = r'path\data\val\brown_bear'
+test_path= r'path\data\test\brown_bear'
 
 train_files = os.listdir(train_path)
 val_files = os.listdir(val_path)
