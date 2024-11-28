@@ -1,0 +1,13 @@
+
+
+train: "E:/Bear Project/data/images/train"
+val: "E:/Bear Project/data/images/val"
+
+
+nc: 1
+names: ['brown_bear']
+
+loss:
+  box: 0.1
+  cls: 0.4
+  dfl: 1.0
