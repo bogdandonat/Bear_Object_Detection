@@ -1,7 +1,7 @@
+# Replace "path" with your path to the data images for training and validation
 
-
-train: "E:/Bear Project/data/images/train"
-val: "E:/Bear Project/data/images/val"
+train: "path/data/images/train"
+val: "path/data/images/val"
 
 
 nc: 1
