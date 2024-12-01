@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bear Detection Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 30px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid black;
+        }
+        .status {
+            font-size: 24px;
+            margin-top: 20px;
+        }
+        .counter {
+            font-size: 20px;
+            margin-top: 10px;
+        }
+    </style>
+    <script>
+        let lastImage = null;
+        // Function to update the image and status without refreshing the page
+        function updateImage() {
+        fetch("/latest-image")
+            .then(response => response.json())
+            .then(data => {
+                if (data.latest_image !== lastImage) {
+                // Update the image only if the latest image is different
+                document.getElementById("latest-image").src = "/static/" + data.latest_image;
+                    lastImage = data.latest_image;
+                }
+
+                document.getElementById("bear-count").textContent = "Bear Detection Count: " + data.bear_count;
+                document.getElementById("relay-status").textContent = "Relay Status: " + data.relay_status;
+            });
+}
+
+        // Call updateImage every 10 seconds to check for new images
+        setInterval(updateImage, 3000);
+
+        // Initial call to load the first image
+        window.onload = updateImage;
+    </script>
+</head>
+<body>
+    <h1>Latest Bear Detection Image</h1>
+    <img id="latest-image" src="{{ url_for ('static', filename='') }}" alt="Latest Image">
+    <div class="status">
+        <p id="relay-status">Relay Status: Unknown</p>
+    </div>
+    <div class="counter">
+        <p id="bear-count">Bear Detection Count: 0</p>
+    </div>
+</body>
+</html>
