@@ -3,49 +3,64 @@ import subprocess
 import paho.mqtt.client as mqtt
 import os
 
-# Configuration
-mqtt_broker = "192.168.0.140"  # Replace with the IP of your PC
-mqtt_port = 1883
-mqtt_publish_topic = "camera/images"
-mqtt_subscribe_topic = "response/trigger"
-image_folder = "/home/bogdan/images"  # Folder to save images (ensure this exists)
+def setup_mqtt_client(broker, port, on_message_callback=None):
+   
+    client = mqtt.Client()
 
-# Ensure the image folder exists
-if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
+    if on_message_callback:
+        client.on_message = on_message_callback
 
-# Set up MQTT client
-client = mqtt.Client()
+    client.connect(broker, port)
+    client.loop_start()
+    return client
 
-# Connect to the MQTT broker
-client.connect(mqtt_broker, mqtt_port)
+def ensure_folder_exists(folder_path):
+   
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
 
-# Start MQTT client loop
-client.loop_start()
+def capture_image(image_folder, width=256, height=256):
+   
+    timestamp = int(time.time() * 1000)
+    image_path = os.path.join(image_folder, f"image_{timestamp}.jpg")
 
-def capture_and_send_image():
+    result = subprocess.run(
+        ["libcamera-still", "--width", str(width), "--height", str(height), "-o", image_path],
+        capture_output=True
+    )
+
+    if result.returncode == 0:
+        print(f"Image saved: {image_path}")
+        return image_path
+    else:
+        print(f"Error capturing image: {result.stderr.decode()}")
+        return None
+
+def send_image_to_mqtt(client, topic, image_path):
+    
+    with open(image_path, "rb") as f:
+        image_data = f.read()
+    client.publish(topic, image_data)
+    print(f"Image sent to topic {topic}")
+
+def capture_and_send_images(client, topic, image_folder, interval=1/30):
+    
+    ensure_folder_exists(image_folder)
+    image_path = capture_image(image_folder)
+    if image_path:
+        send_image_to_mqtt(client, topic, image_path)
+    time.sleep(interval)
+
+def listen(broker, port, topic, handle_message):
+
+    def on_message(client, userdata, message):
+        payload = message.payload.decode()
+        print(f"Received message on topic {message.topic}: {payload}")
+        handle_message(payload)
+    
+    print("Setting up MQTT client for listening..")
+    client = setup_mqtt_client(broker, port, on_message_callback=None)
+    client.subscribe(topic)
+    print(f"Subscribed to topic: {topic}")
     while True:
-        # Generate a unique filename for each image
-        timestamp = int(time.time() * 1000)
-        image_path = os.path.join(image_folder, f"image_{timestamp}.jpg")
-        
-        # Capture image using libcamera (without --format option)
-        result = subprocess.run(["libcamera-still", "--width", "256", "--height", "256", "-o", image_path], capture_output=True)
-
-        if result.returncode == 0:
-            print(f"Image saved: {image_path}")
-
-            # Read the captured image
-            with open(image_path, "rb") as f:
-                image_data = f.read()
-            
-            # Publish image to MQTT broker
-            client.publish(mqtt_publish_topic, image_data)
-            print("Image sent to broker")
-        else:
-            print(f"Error capturing image: {result.stderr.decode()}")
-
-        time.sleep(1 / 30)  # Wait for 1/30th of a second to simulate 30 FPS
-
-# Capture and send images
-capture_and_send_image()
+        time.sleep(1)
