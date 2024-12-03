@@ -7,18 +7,22 @@ import paho.mqtt.client as mqtt
 import numpy as np
 from flask import Flask, jsonify, send_from_directory, request, make_response, render_template
 import uuid
+from urllib.parse import quote
+from flask_caching import Cache
 
 # Configuration
-
 model_path = r"C:\Users\Bogdan\runs\detect\train15_v2\weights\best.pt"
-image_folder = r"E:\Bear Project\images captured"
+image_folder = r"E:\Bear Project\dev\Bear_Object_Detection\static"  
+upload_folder = r"E:\Bear Project\dev\Bear_Object_Detection\upload_folder"
 mqtt_broker = "localhost"
 mqtt_port = 1883
 mqtt_publish_topic = "response/trigger"
 mqtt_subscribe_topic = "camera/images"
 
 # Create Flask app
-app = Flask(__name__, static_folder=image_folder)
+app = Flask(__name__, static_folder="static")
+
+print(f"Flask Working Directory: {os.getcwd()}")
 
 # Counter and relay status
 bear_counter = 0
@@ -39,13 +43,14 @@ def on_message(client, userdata, msg):
     # Convert image bytes to OpenCV image
     image_np = np.frombuffer(msg.payload, dtype=np.uint8)
     image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
-
+    timestamp = int(time.time() * 1000)
     # Save the image with a timestamped filename
-    image_path = os.path.join(image_folder, f"image_{int(time.time() * 1000)}.jpg")
+    image_path = os.path.join(image_folder, f"image_{timestamp}.jpg")
+    print(f"Saving image to: {image_path}")
     cv2.imwrite(image_path, image)
 
     # Update latest image information
-    latest_image = f"image_{int(time.time() * 1000)}.jpg"
+    latest_image = f"image_{timestamp}.jpg"
     print(f"Image received and saved: {image_path}")
 
     # Perform object detection
@@ -87,6 +92,24 @@ def mqtt_client():
     client.loop_forever()
 
 # Flask routes
+@app.after_request
+def add_header(response):
+    response.cache_control.no_cache = True
+    return response
+
+# Route to serve the latest image captured from the image folder
+@app.route('/images-captured/<filename>')
+def send_image(filename):
+    # Serving images from static folder
+     """images_path = app.static_folder
+     image_files = [
+        (file, os.path.getmtime(os.path.join(images_path, file)))
+        for file in os.listdir(images_path)
+        if file.lower().endswith(('png', 'jpg', 'jpeg', 'gif'))
+    ]
+     image_files.sort(key=lambda x: x[1], reverse=True)
+     latest_image = image_files[0][0] if image_files else None """
+     return send_from_directory(app.static_folder, filename)
 
 # Route to return the latest image and stats in JSON format
 @app.route('/latest-image')
@@ -101,68 +124,26 @@ def latest_image_route():
             'relay_status': "Active" if relay_on else "Inactive"
         }))
         
-        # Cache the response for 10 seconds
-        response.headers['Cache-Control'] = 'public, max-age=10'
         
         return response
     else:
         return jsonify({
-            'latest_image': '',  # No image yet, return empty string
+            'latest_image': '',  # No image yet
             'bear_count': bear_counter,
             'relay_status': "Inactive"
         })
-
-# Route to serve static images from the image folder
-@app.route('/static/<filename>')
-def send_image(filename):
-    return send_from_directory(image_folder, filename)
 
 @app.route('/')
 def index():
     global latest_image, bear_counter, relay_on
 
     if latest_image:
-        image_url = f"/static/{latest_image}"
+        image_url = f"/static/{latest_image}"  # Corrected link to latest image
     else:
         image_url = ''
     
+    print(f"Latest image: {latest_image}")
     return render_template("index.html", latest_image=image_url, bear_count=bear_counter, relay_status=relay_on)
-   
-
-# Route to upload a new image
-@app.route('/upload-image', methods=['POST'])
-def upload_image():
-    global latest_image, bear_counter, relay_on
-
-    # Check if an image file was provided in the request
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image file provided'}), 400
-
-    image_file = request.files['image']
-
-    # Check if the image file is empty
-    if image_file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    # Generate a unique filename for the uploaded image (to avoid overwriting existing files)
-    file_extension = image_file.filename.split('.')[-1]
-    new_image_filename = str(uuid.uuid4()) + '.' + file_extension
-
-    # Save the image to the specified directory
-    image_path = os.path.join(image_folder, new_image_filename)
-    image_file.save(image_path)
-
-    # Update the latest image information
-    latest_image = new_image_filename
-
-    # Simulate bear count increment and relay status change
-    bear_counter += 1  # Example increment for each new bear detected
-    relay_on = True  # Example status change for the relay
-
-    return jsonify({
-        'message': 'Image uploaded successfully',
-        'latest_image': latest_image
-    })
 
 def flask_server():
     app.run(debug=True, host='0.0.0.0', port=5000)
