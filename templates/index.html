@@ -33,6 +33,16 @@
             margin-top: 10px;
             color: green;
         }
+        .temperature {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #555;
+        }
+        .battery {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -45,6 +55,16 @@
     <div class="stats">
         <p><strong>Bear Count:</strong> <span id="bear-count">0</span></p>
         <p><strong>Relay Status:</strong> <span id="relay-status">Inactive</span></p>
+    </div>
+
+    <div class="battery">
+        <p><strong>Battery Percentage:</strong> <span id="battery-percentage">N/A</span>%</p> <!-- Added battery percentage -->
+    </div>
+
+    <div class="temperature">
+        <p><strong>Temperature Data:</strong></p>
+        <p>Max Temp: <span id="max-temp">N/A</span> °C</p>
+        <p>Max Allowed Temp: <span id="max-allowed-temp">N/A</span> °C</p>
     </div>
 
     <div class="refresh-status" id="refresh-status"></div>
@@ -69,6 +89,22 @@
                 document.getElementById('bear-count').textContent = data.bear_count;
                 document.getElementById('relay-status').textContent = data.relay_status;
 
+                // Update battery percentage
+                if (data.battery_percentage !== undefined) {
+                    document.getElementById('battery-percentage').textContent = data.battery_percentage || 'N/A';
+                } else {
+                    document.getElementById('battery-percentage').textContent = 'N/A';
+                }
+
+                // Update temperature data
+                if (data.temperature) {
+                    document.getElementById('max-temp').textContent = data.temperature.max_temp || 'N/A';
+                    document.getElementById('max-allowed-temp').textContent = data.temperature.max_allowed_temp || 'N/A';
+                } else {
+                    document.getElementById('max-temp').textContent = 'N/A';
+                    document.getElementById('max-allowed-temp').textContent = 'N/A';
+                }
+
                 // Update refresh status
                 const refreshStatus = document.getElementById('refresh-status');
                 refreshStatus.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
@@ -77,8 +113,8 @@
             }
         }
 
-        // Refresh data every 3 seconds
-        setInterval(fetchLatestInfo, 3000);
+        // Refresh data every 0.1 second
+        setInterval(fetchLatestInfo, 100);
 
         // Initial fetch
         fetchLatestInfo();
