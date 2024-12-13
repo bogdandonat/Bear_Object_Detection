@@ -16,7 +16,9 @@ upload_folder = r"E:\Bear Project\dev\Bear_Object_Detection\upload_folder"
 mqtt_broker = "localhost"
 mqtt_port = 1883
 mqtt_publish_topic = "response/trigger"
+mqtt_subscribe_temp_topic = "sensor/temperature"
 mqtt_subscribe_topic = "camera/images"
+mqtt_subscribe_battery_topic = "sensor/battery"
 
 # Create Flask app
 app = Flask(__name__, static_folder="static")
@@ -25,6 +27,8 @@ app = Flask(__name__, static_folder="static")
 bear_counter = 0
 relay_on = False
 latest_image = None
+latest_temperature = None
+latest_battery_percentage = None
 
 # Create folder for storing the images
 if not os.path.exists(image_folder):
@@ -38,26 +42,44 @@ image_queue = Queue()
 
 # MQTT Callback for receiving messages
 def on_message(client, userdata, msg):
-    global bear_counter, relay_on, latest_image
-
+    global bear_counter, relay_on, latest_image, latest_temperature, latest_battery_percentage
+    #Message topic is image
+    if msg.topic == mqtt_subscribe_topic:
     # Convert image bytes to OpenCV image
-    image_np = np.frombuffer(msg.payload, dtype=np.uint8)
-    image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
-    timestamp = int(time.time() * 1000)
-    image_path = os.path.join(image_folder, f"image_{timestamp}.jpg")
-    cv2.imwrite(image_path, image)
+        image_np = np.frombuffer(msg.payload, dtype=np.uint8)
+        image = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
+        timestamp = int(time.time() * 1000)
+        image_path = os.path.join(image_folder, f"image_{timestamp}.jpg")
+        cv2.imwrite(image_path, image)
 
     # Add image path to queue for further processing
-    image_queue.put(image_path)
-    latest_image = f"image_{timestamp}.jpg"
+        image_queue.put(image_path)
+        latest_image = f"image_{timestamp}.jpg"
 
-    print(f"Image received and saved: {image_path}")
+        print(f"Image received and saved: {image_path}")
+    # Message topic is temperature
+    elif msg.topic == mqtt_subscribe_temp_topic:
+        try:
+            temperature_data = eval(msg.payload.decode())
+            latest_temperature = temperature_data
+            print(f"Temperature data received: {latest_temperature}")
+        except Exception as e:
+            print(f"Error parsing temperature data: {e}")
+    elif msg.topic == mqtt_subscribe_battery_topic:
+        try:
+            battery_percentage = float(msg.payload.decode())
+            latest_battery_percentage = round(battery_percentage, 0)
+            print(f"Battery percentage received: {latest_battery_percentage}%")
+        except Exception as e:
+            print(f"Error parsing battery percentage: {e}") 
 
 # MQTT setup
 client = mqtt.Client()
 client.on_message = on_message
 client.connect(mqtt_broker, mqtt_port)
 client.subscribe(mqtt_subscribe_topic)
+client.subscribe(mqtt_subscribe_temp_topic)
+client.subscribe(mqtt_subscribe_battery_topic)
 
 def mqtt_client():
     client.loop_forever()
@@ -76,7 +98,7 @@ def process_images():
 
             for result in results:
                 for box, conf, cls in zip(result.boxes.xywh, result.boxes.conf, result.boxes.cls):
-                    if result.names[int(cls)] == 'brown_bear' and conf > 0.8:
+                    if result.names[int(cls)] == 'brown_bear' and conf > 0.6:
                         detected_bears.append({
                             'x': box[0], 'y': box[1], 'width': box[2], 'height': box[3], 'confidence': conf
                         })
@@ -107,32 +129,39 @@ def send_image(filename):
 
 @app.route('/latest-image')
 def latest_image_route():
-    global latest_image, bear_counter, relay_on
-
+    global latest_image, bear_counter, relay_on, latest_temperature, latest_battery_percentage
+    if latest_battery_percentage is not None:
+        print(f"Latest battery percentage in the route: {latest_battery_percentage:.2f}")
+    else:
+        print("Battery percentage is not yet available")
     if latest_image:
         response = make_response(jsonify({
             'latest_image': latest_image,
             'bear_count': bear_counter,
-            'relay_status': "Active" if relay_on else "Inactive"
+            'relay_status': "Active" if relay_on else "Inactive",
+            'temperature': latest_temperature,
+            'battery_percentage': latest_battery_percentage
         }))
         return response
     else:
         return jsonify({
             'latest_image': '',  # No image yet
             'bear_count': bear_counter,
-            'relay_status': "Inactive"
+            'relay_status': "Inactive",
+            'temperature': latest_temperature,
+            'battery_percentage': latest_battery_percentage
         })
 
 @app.route('/')
 def index():
-    global latest_image, bear_counter, relay_on
+    global latest_image, bear_counter, relay_on, latest_temperature, latest_battery_percentage
 
     if latest_image:
-        image_url = f"/static/{latest_image}"  # Corrected link to latest image
+        image_url = f"/static/{latest_image}"  
     else:
         image_url = ''
     
-    return render_template("index.html", latest_image=image_url, bear_count=bear_counter, relay_status=relay_on)
+    return render_template("index.html", latest_image=image_url, bear_count=bear_counter, relay_status=relay_on, latest_temperature=latest_temperature, battery_percentage= latest_battery_percentage)
 
 # Flask server
 def flask_server():
