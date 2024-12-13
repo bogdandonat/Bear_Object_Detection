@@ -1,17 +1,20 @@
 import os
 import time
 import threading
+import smbus
 import cv2
 from queue import Queue
 from camera_test import setup_mqtt_client, capture_and_send_images, listen
 from relay_control import relay_setup, turn_off_relay, turn_on_relay
 from thermal_sensor_testing import ThermalSensor
+from ads_1115 import configure_ads1115, read_raw_ads1115, convert_to_battery_voltage, battery_percentage
 
 # Configuration
 MQTT_BROKER = "192.168.0.140"
 MQTT_PORT = 1883
 MQTT_PUBLISH_TOPIC = "camera/images"
 MQTT_SUBSCRIBE_TOPIC = "response/trigger"
+MQTT_BATTERY_TOPIC = "sensor/battery"
 IMAGE_FOLDER = "/home/bogdan/images"
 RELAY_PIN_1 = 17  # Alarm pin
 RELAY_PIN_2 = 27  # LED pin
@@ -22,8 +25,26 @@ max_allowed_temp = 0
 relay_state = False
 image_queue = Queue()
 
+
 # Event to trigger relay from MQTT messages
 relay_trigger_event = threading.Event()
+
+# Battery voltage percentage sent via MQTT
+def send_battery_percentage():
+    client = setup_mqtt_client(MQTT_BROKER, MQTT_PORT)
+    while True:
+        calibration_factor = 0.99
+        raw_data = read_raw_ads1115()
+        battery_voltage = convert_to_battery_voltage(raw_data)
+        battery_voltage *= calibration_factor
+        percentage = battery_percentage(battery_voltage)
+
+        if percentage is not None:
+            client.publish(MQTT_BATTERY_TOPIC, str(percentage))
+            print(f"Battery percentage: {percentage:.2f}%")
+        else:
+            print("Failed to calculate battery percentage")
+        time.sleep(1)
 
 def handle_message(payload):
     """Handles the MQTT message and triggers the relay."""
@@ -63,11 +84,19 @@ def read_temperature():
     """Read the temperature continuously in a separate thread."""
     global max_temp, max_allowed_temp
     thermal_sensor = ThermalSensor()
+    client = setup_mqtt_client(MQTT_BROKER, MQTT_PORT)
+    temp_publish_topic = "sensor/temperature"
+
     while True:
         try:
             max_temp, max_allowed_temp = thermal_sensor.read_temperature()
             if max_temp is not None and max_allowed_temp is not None:
                 print(f"Maximum temp: {max_temp:.2f} °C, Max Allowed Temp: {max_allowed_temp} °C")
+                temperature_data = {
+                    "max_temp": round(max_temp, 2),
+                    "max_allowed_temp": max_allowed_temp
+                }
+                client.publish(temp_publish_topic, str(temperature_data))
             else:
                 print("Temperature data is not available")
         except Exception as e:
@@ -114,6 +143,10 @@ def main():
     print("Starting relay control in a separate thread...")
     relay_thread = threading.Thread(target=control_relay, daemon=True)
     relay_thread.start()
+
+    print("Starting battery percentage monitoring in a separate thread...")
+    battery_thread = threading.Thread(target=send_battery_percentage, daemon=True)
+    battery_thread.start()
 
     print("All peripherals and sensors are initialized. Starting main loop...")
 
