@@ -1,5 +1,5 @@
 # Bear_Object_Detection
-YOLO model for detecting brown bears on a custom dataset, deployment on MQTT server and visual input from Raspberry Pi 4, User could see the input on a webpage created with flask that is running on the same server as MQTT broker
+YOLO model for detecting brown bears on a custom dataset, deployment on MQTT server and visual input from Raspberry Pi 4, User could see the output on a webpage created with flask that is running on the same server as MQTT broker
 
 SHORT DESCRIPTION:
 
