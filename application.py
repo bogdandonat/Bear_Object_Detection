@@ -10,9 +10,8 @@ from queue import Queue
 import uuid
 
 # Configuration
-model_path = r"C:\Users\Bogdan\runs\detect\train15_v2\weights\best.pt"
-image_folder = r"E:\Bear Project\dev\Bear_Object_Detection\static"
-upload_folder = r"E:\Bear Project\dev\Bear_Object_Detection\upload_folder"
+model_path = r"YourPath\weights\best.pt"
+image_folder = r"YourPath\static"
 mqtt_broker = "localhost"
 mqtt_port = 1883
 mqtt_publish_topic = "response/trigger"
