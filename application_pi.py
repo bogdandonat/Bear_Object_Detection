@@ -10,7 +10,7 @@ from thermal_sensor_testing import ThermalSensor
 from ads_1115 import configure_ads1115, read_raw_ads1115, convert_to_battery_voltage, battery_percentage
 
 # Configuration
-MQTT_BROKER = "192.168.0.140"
+MQTT_BROKER = "YourBrokerIp"
 MQTT_PORT = 1883
 MQTT_PUBLISH_TOPIC = "camera/images"
 MQTT_SUBSCRIBE_TOPIC = "response/trigger"
